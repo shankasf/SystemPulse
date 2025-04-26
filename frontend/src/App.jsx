@@ -1,67 +1,63 @@
-// src/App.jsx
+// frontend/src/App.jsx
 
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
 import CPUChart from "./components/CPUChart";
+import SystemLoadChart from "./components/SystemLoadChart";
 import MemoryChart from "./components/MemoryChart";
-import DiskChart from "./components/DiskChart";
+import DiskIOChart from "./components/DiskIOChart";
 import NetworkChart from "./components/NetworkChart";
+import UptimeDisplay from "./components/UptimeDisplay";
 import ProcessTable from "./components/ProcessTable";
 
-function App() {
-  const [metrics, setMetrics] = useState([]);
-  const [alert, setAlert] = useState(null);
+import "./App.css";
 
-  // Fetch metrics & check alerts every 5 seconds
+export default function App() {
+  const [metrics, setMetrics] = useState([]);
+
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
         const res = await axios.get("/metrics");
-        const all = res.data.data;
-        setMetrics(all);
-
-        // → Alert logic: trigger if any CPU usage > 90%
-        const cpuValues = all
-          .filter(
-            (d) => d.measurement === "cpu_usage" && d.field === "usage_pct"
-          )
-          .map((d) => d.value);
-        if (cpuValues.length) {
-          const maxCpu = Math.max(...cpuValues);
-          if (maxCpu > 90) {
-            setAlert(`🚨 High CPU detected: ${maxCpu.toFixed(1)}%`);
-          } else {
-            setAlert(null);
-          }
-        }
+        console.log("fetched metrics:", res.data.data);
+        setMetrics(res.data.data);
       } catch (err) {
-        console.error("Error fetching metrics:", err);
+        console.error("Fetch error:", err);
       }
     };
-
     fetchMetrics();
-    const intervalId = setInterval(fetchMetrics, 5000);
-    return () => clearInterval(intervalId);
+    const id = setInterval(fetchMetrics, 5000);
+    return () => clearInterval(id);
   }, []);
 
   return (
     <div className="container">
       <h1>SystemPulse Dashboard</h1>
-      {alert && <div className="alert">{alert}</div>}
 
       <div className="grid">
         <div className="card">
           <CPUChart data={metrics} />
         </div>
+
+        <div className="card">
+          <SystemLoadChart data={metrics} />
+        </div>
+
         <div className="card">
           <MemoryChart data={metrics} />
         </div>
+
         <div className="card">
-          <DiskChart data={metrics} />
+          <DiskIOChart data={metrics} />
         </div>
+
         <div className="card">
           <NetworkChart data={metrics} />
+        </div>
+
+        <div className="card">
+          <UptimeDisplay data={metrics} />
         </div>
       </div>
 
@@ -72,5 +68,3 @@ function App() {
     </div>
   );
 }
-
-export default App;

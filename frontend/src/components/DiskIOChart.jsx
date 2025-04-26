@@ -9,13 +9,16 @@ import {
   Legend,
 } from "recharts";
 
-export default function DiskChart({ data }) {
+export default function DiskIOChart({ data }) {
   const raw = data.filter((d) => d.measurement === "disk_io");
   const byTime = {};
   raw.forEach(({ time, field, value }) => {
     const t = new Date(time).toLocaleTimeString();
     byTime[t] = byTime[t] || { time: t };
-    byTime[t][field] = Number(value.toFixed(2));
+    if (field === "read_mb_s") byTime[t].read_mb_s = Number(value.toFixed(2));
+    if (field === "write_mb_s") byTime[t].write_mb_s = Number(value.toFixed(2));
+    if (field === "read_iops") byTime[t].read_iops = Number(value.toFixed(1));
+    if (field === "write_iops") byTime[t].write_iops = Number(value.toFixed(1));
   });
   const series = Object.values(byTime);
 
