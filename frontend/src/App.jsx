@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import CPUChart from "./components/CPUChart";
 import SystemLoadChart from "./components/SystemLoadChart";
@@ -20,8 +22,19 @@ export default function App() {
     const fetchMetrics = async () => {
       try {
         const res = await axios.get("/metrics");
-        console.log("fetched metrics:", res.data.data);
         setMetrics(res.data.data);
+
+        // After setting metrics, check for high CPU
+        const cpuPoints = res.data.data.filter(
+          (d) => d.measurement === "cpu_usage" && d.field === "usage_pct"
+        );
+        const latestCpu = cpuPoints[cpuPoints.length - 1]?.value || 0;
+        if (latestCpu > 10) {
+          toast.error(`🚨 High CPU Usage: ${latestCpu.toFixed(1)}%`, {
+            position: "top-right",
+            autoClose: 5000,
+          });
+        }
       } catch (err) {
         console.error("Fetch error:", err);
       }
@@ -34,6 +47,7 @@ export default function App() {
   return (
     <div className="container">
       <h1>SystemPulse Dashboard</h1>
+      <ToastContainer />
 
       <div className="grid">
         <div className="card">

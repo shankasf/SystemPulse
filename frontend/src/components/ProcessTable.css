@@ -1,0 +1,40 @@
+.process-table-wrapper {
+  overflow-x: auto;
+}
+
+.process-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+  background-color: white;
+}
+
+.process-table thead {
+  background-color: #f4f6f8;
+}
+
+.process-table th,
+.process-table td {
+  padding: 12px 16px;
+  font-size: 14px;
+  text-align: left;
+}
+
+.process-table th {
+  color: #333;
+  font-weight: bold;
+}
+
+.process-table tbody tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.process-table tbody tr:hover {
+  background-color: #e8f0fe;
+}
+
+.right-align {
+  text-align: right;
+}

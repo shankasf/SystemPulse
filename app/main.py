@@ -3,9 +3,7 @@ import logging
 import time
 import os
 import psutil
-import smtplib
-from email.message import EmailMessage
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from influxdb_client import InfluxDBClient, Point, WriteOptions
 import uvicorn
@@ -18,13 +16,6 @@ INFLUXDB_TOKEN  = os.getenv("INFLUXDB_TOKEN", "KabRYpBt5CK_GNLjD5h1S1lw1qyJ9EGkD
 INFLUXDB_ORG    = "SystemPulseOrg"
 INFLUXDB_BUCKET = "system_metrics_bucket"
 
-# ─── Email Alert Configuration ────────────────────────────────────────────────
-ALERT_EMAIL = os.getenv("ALERT_EMAIL", "alert@example.com")
-SMTP_HOST   = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT   = int(os.getenv("SMTP_PORT", 587))
-SMTP_USER   = os.getenv("SMTP_USER", "youremail@gmail.com")
-SMTP_PASS   = os.getenv("SMTP_PASS", "yourpassword")
-
 # ─── InfluxDB Client Setup ─────────────────────────────────────────────────────
 client    = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
 write_api = client.write_api(write_options=WriteOptions(batch_size=1))
@@ -36,7 +27,6 @@ prev_net  = psutil.net_io_counters()
 prev_time = time.time()
 
 async def collect_metrics():
-    # 1) Static CPU info once at startup
     freq = psutil.cpu_freq()
     cpu_info = (
         Point("cpu_info")
@@ -55,7 +45,6 @@ async def collect_metrics():
             now      = time.time()
             interval = now - prev_time
 
-            # --- CPU usage & load averages ---
             cpu_pct = psutil.cpu_percent(interval=None)
             load1, load5, load15 = (
                 psutil.getloadavg() if hasattr(psutil, "getloadavg") else (0.0,0.0,0.0)
@@ -69,7 +58,6 @@ async def collect_metrics():
                 .field("load_15m",   load15)
             ))
 
-            # --- Memory usage ---
             vm = psutil.virtual_memory()
             write_api.write(bucket=INFLUXDB_BUCKET, record=(
                 Point("memory_usage")
@@ -80,7 +68,6 @@ async def collect_metrics():
                 .field("swap_mb",  psutil.swap_memory().used/1e6)
             ))
 
-            # --- Disk I/O speeds & IOPS ---
             cur_disk = psutil.disk_io_counters()
             read_bytes  = cur_disk.read_bytes  - prev_disk.read_bytes
             write_bytes = cur_disk.write_bytes - prev_disk.write_bytes
@@ -96,7 +83,6 @@ async def collect_metrics():
             ))
             prev_disk = cur_disk
 
-            # --- Network throughput & errors/drops ---
             cur_net = psutil.net_io_counters()
             sent_bytes = cur_net.bytes_sent - prev_net.bytes_sent
             recv_bytes = cur_net.bytes_recv - prev_net.bytes_recv
@@ -114,7 +100,6 @@ async def collect_metrics():
             ))
             prev_net  = cur_net
 
-            # --- Per-process info ---
             for p in psutil.process_iter(["pid","name","cpu_percent","memory_percent"]):
                 info = p.info
                 write_api.write(bucket=INFLUXDB_BUCKET, record=(
@@ -126,7 +111,6 @@ async def collect_metrics():
                     .field("mem_pct", info["memory_percent"])
                 ))
 
-            # --- System load measurement ---
             write_api.write(bucket=INFLUXDB_BUCKET, record=(
                 Point("system_load")
                 .tag("hostname","server1")
@@ -135,7 +119,6 @@ async def collect_metrics():
                 .field("load_15m", load15)
             ))
 
-            # --- Uptime ---
             uptime_sec = now - psutil.boot_time()
             write_api.write(bucket=INFLUXDB_BUCKET, record=(
                 Point("system_uptime")
@@ -163,25 +146,14 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/metrics")
 async def get_metrics():
-    """
-    Return last 1 minute of ALL measurements, including tags:
-    cpu_info, cpu_usage, memory_usage, disk_io, network_activity,
-    process_info, system_load, system_uptime.
-    """
-    query = f'''
-      from(bucket:"{INFLUXDB_BUCKET}")
-        |> range(start: -1m)
-    '''
+    query = f'''from(bucket:"{INFLUXDB_BUCKET}")
+      |> range(start: -1m)'''
     tables = query_api.query(org=INFLUXDB_ORG, query=query)
     out = []
     for table in tables:
         for r in table.records:
-            # extract all non‐meta values as tags
-            tag_dict = {
-                k: v
-                for k, v in r.values.items()
-                if k not in ("_time", "_value", "_field", "_measurement")
-            }
+            tag_dict = {k: v for k, v in r.values.items()
+                        if k not in ("_time", "_value", "_field", "_measurement")}
             out.append({
                 "time":        str(r.get_time()),
                 "measurement": r.get_measurement(),
@@ -190,24 +162,6 @@ async def get_metrics():
                 "tags":        tag_dict,
             })
     return {"data": out}
-
-@app.post("/notify/email")
-async def send_email_alert(background_tasks: BackgroundTasks, subject: str, body: str, to: str = ALERT_EMAIL):
-    """
-    Send an email alert asynchronously.
-    """
-    def _send():
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"]    = SMTP_USER
-        msg["To"]      = to
-        msg.set_content(body)
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
-            smtp.starttls()
-            smtp.login(SMTP_USER, SMTP_PASS)
-            smtp.send_message(msg)
-    background_tasks.add_task(_send)
-    return {"status": "queued"}
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
