@@ -12,20 +12,19 @@ import {
 } from "recharts";
 
 export default function NetworkChart({ data }) {
-  // filter for the actual measurement name coming from your backend
+  // pick out only your network_activity points
   const raw = data.filter((d) => d.measurement === "network_activity");
 
-  // group by time and collect packets_sent, packets_recv, (and optionally err_out)
+  // group by timestamp, collecting sent_mb_s & recv_mb_s
   const byTime = {};
   raw.forEach(({ time, field, value }) => {
     const t = new Date(time).toLocaleTimeString();
-    byTime[t] = byTime[t] || { time: t };
-    if (field === "packets_sent") byTime[t].packets_sent = value;
-    if (field === "packets_recv") byTime[t].packets_recv = value;
-    if (field === "err_out") byTime[t].err_out = value; // optional
+    byTime[t] = byTime[t] || { time: t, sent_mb_s: 0, recv_mb_s: 0 };
+    if (field === "sent_mb_s") byTime[t].sent_mb_s = value;
+    if (field === "recv_mb_s") byTime[t].recv_mb_s = value;
   });
 
-  // convert into an array for the chart
+  // convert to array, sorted by time if you like
   const series = Object.values(byTime);
 
   return (
@@ -39,31 +38,20 @@ export default function NetworkChart({ data }) {
         <Legend verticalAlign="top" height={24} />
         <Area
           type="monotone"
-          dataKey="packets_sent"
-          name="Packets Sent"
+          dataKey="sent_mb_s"
+          name="Sent MB/s"
           fill="#8884d8"
           stroke="#8884d8"
           dot={false}
         />
         <Area
           type="monotone"
-          dataKey="packets_recv"
-          name="Packets Recv"
+          dataKey="recv_mb_s"
+          name="Recv MB/s"
           fill="#82ca9d"
           stroke="#82ca9d"
           dot={false}
         />
-        {/*
-        // If you want to display error counts too:
-        <Area
-          type="monotone"
-          dataKey="err_out"
-          name="Errors Out"
-          fill="#d88484"
-          stroke="#d88484"
-          dot={false}
-        />
-        */}
       </AreaChart>
     </>
   );

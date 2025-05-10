@@ -1,5 +1,3 @@
-// frontend/src/App.jsx
-
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { ToastContainer, toast } from "react-toastify";
@@ -17,31 +15,52 @@ import "./App.css";
 
 export default function App() {
   const [metrics, setMetrics] = useState([]);
+  const [processes, setProcesses] = useState([]);
 
   useEffect(() => {
-    const fetchMetrics = async () => {
+    const fetchData = async () => {
       try {
-        const res = await axios.get("/metrics");
-        setMetrics(res.data.data);
+        // 1) Fetch all metrics for charts and alerts
+        const { data: metricsResp } = await axios.get("/metrics");
+        const allMetrics = metricsResp.data;
+        setMetrics(allMetrics);
 
-        // After setting metrics, check for high CPU
-        const cpuPoints = res.data.data.filter(
+        // CPU alert (threshold matches backend: 72%)
+        const cpuPts = allMetrics.filter(
           (d) => d.measurement === "cpu_usage" && d.field === "usage_pct"
         );
-        const latestCpu = cpuPoints[cpuPoints.length - 1]?.value || 0;
-        if (latestCpu > 10) {
-          toast.error(`🚨 High CPU Usage: ${latestCpu.toFixed(1)}%`, {
+        const lastCpu = cpuPts[cpuPts.length - 1]?.value || 0;
+        if (lastCpu > 72) {
+          toast.error(`🚨 High CPU Usage: ${lastCpu.toFixed(1)}%`, {
             position: "top-right",
             autoClose: 5000,
           });
         }
+
+        // Memory alert (backend threshold: 72%)
+        const memPts = allMetrics.filter(
+          (d) => d.measurement === "memory_usage" && d.field === "used_mb"
+        );
+        const lastMemMb = memPts[memPts.length - 1]?.value || 0;
+        // If you want percent, backend could emit mem_pct; otherwise compare MB
+        if (lastMemMb > /* e.g. convert 72% of total MB */ 0) {
+          toast.error(`🚨 High Memory Used: ${lastMemMb.toFixed(1)} MB`, {
+            position: "top-right",
+            autoClose: 5000,
+          });
+        }
+
+        // 2) Fetch process list for the table
+        const { data: procResp } = await axios.get("/processes");
+        setProcesses(procResp.processes);
       } catch (err) {
         console.error("Fetch error:", err);
       }
     };
-    fetchMetrics();
-    const id = setInterval(fetchMetrics, 5000);
-    return () => clearInterval(id);
+
+    fetchData();
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -53,23 +72,18 @@ export default function App() {
         <div className="card">
           <CPUChart data={metrics} />
         </div>
-
         <div className="card">
           <SystemLoadChart data={metrics} />
         </div>
-
         <div className="card">
           <MemoryChart data={metrics} />
         </div>
-
         <div className="card">
           <DiskIOChart data={metrics} />
         </div>
-
         <div className="card">
           <NetworkChart data={metrics} />
         </div>
-
         <div className="card">
           <UptimeDisplay data={metrics} />
         </div>
@@ -77,7 +91,7 @@ export default function App() {
 
       <div className="card table-card">
         <h2>Top Processes</h2>
-        <ProcessTable data={metrics} />
+        <ProcessTable processes={processes} />
       </div>
     </div>
   );
