@@ -1,76 +1,81 @@
 # SystemPulse
 
-A lightweight FastAPI service that collects system performance metrics (CPU, memory, disk, network, processes) and writes them into InfluxDB, with a `/metrics` HTTP endpoint for querying the last minute of data. Includes full test coverage (unit, integration, end-to-end) and a CI pipeline.
+**SystemPulse** is a real-time system monitoring tool built with **FastAPI**, **InfluxDB 2.x**, and a React-based dashboard. It captures CPU, memory, disk, network, and process stats every 5 seconds and visualizes them live. Supports Telegram alerts and metrics export. Ideal for system admins, developers, or hobbyists who want lightweight local observability.
 
 ---
 
 ## Table of Contents
 
-1. [Features](#features)  
-2. [Prerequisites](#prerequisites)  
-3. [Project Structure](#project-structure)  
-4. [Getting Started](#getting-started)  
-   - [1. Clone & Install](#1-clone--install)  
-   - [2. Run InfluxDB](#2-run-influxdb)  
-   - [3. Start the API](#3-start-the-api)  
-   - [4. Query Metrics](#4-query-metrics)  
-5. [Metrics Collected](#metrics-collected)  
-6. [Testing](#testing)  
-7. [CI Pipeline](#ci-pipeline)  
-8. [Future Enhancements](#future-enhancements)  
+1. [Features](#features)
+2. [Architecture](#architecture)
+3. [Prerequisites](#prerequisites)
+4. [Project Structure](#project-structure)
+5. [Getting Started](#getting-started)
+
+   * [1. Clone & Install](#1-clone--install)
+   * [2. Run InfluxDB](#2-run-influxdb)
+   * [3. Start the Backend API](#3-start-the-backend-api)
+   * [4. Start the Frontend](#4-start-the-frontend)
+6. [Metrics Captured](#metrics-captured)
+7. [Alerts & Notifications](#alerts--notifications)
+8. [File-Based Metrics Dump](#file-based-metrics-dump)
+9. [Testing](#testing)
+10. [Future Enhancements](#future-enhancements)
 
 ---
 
 ## Features
 
-- **Background collection** every 5 seconds of:
-  - **CPU** utilization & load averages  
-  - **Memory** total & used  
-  - **Disk** total & free space (root)  
-  - **Network** bytes sent & received  
-  - **Process** snapshot: PID, name, CPU %, memory %  
-  - **Static CPU info**: frequency, physical cores, logical threads  
-- **InfluxDB 2.x** integration (writes & Flux queries)  
-- **FastAPI** `/metrics` endpoint returning JSON of the last 1 minute of data  
-- **Visualization script** for quick local charts  
-- **Tests**:
-  - **Unit**: `collect_metrics()` logic  
-  - **Integration**: `/metrics` HTTP behavior under mocked responses  
-  - **E2E**: real InfluxDB container via Testcontainers  
-- **Coverage** enforced at ≥ 85%  
-- **CI** example (GitHub Actions) bringing up InfluxDB service and running tests  
+✅ FastAPI-based backend service
+✅ CPU, memory, disk, network, uptime & process info every 5s
+✅ InfluxDB 2.x integration with Flux queries
+✅ Real-time **React dashboard** at `http://localhost:3000`
+✅ Alerts via **Telegram bot** for CPU/Memory overuse
+✅ Auto-dumps last 5m metrics to `metrics/` every 5 minutes
+✅ Sortable process table with usage normalization
+✅ Responsive UI & notification toasts
+✅ CLI + GUI compatible
+
+---
+
+## Architecture
+
+```
++-------------+        +-------------+       +-------------+       +------------------+
+|  FastAPI    |  -->   |  InfluxDB   | <-->  |  React UI   | <---> |  Your Browser    |
+|  main.py    |        |  2.7 local  |       |  /frontend   |       | (localhost:3000) |
++-------------+        +-------------+       +-------------+       +------------------+
+    ↑
+    └───── background asyncio collector
+           (psutil: CPU, RAM, DISK, NET, PROCS)
+```
 
 ---
 
 ## Prerequisites
 
-- Python 3.10+  
-- Docker (for local InfluxDB or CI)  
-- (Optional) Minikube/Kubernetes if using the provided `influxdb.yaml`  
+* Python 3.10+
+* Node.js + npm (for frontend)
+* Docker (for InfluxDB)
+* (Optional) Telegram account & bot token
 
 ---
 
 ## Project Structure
 
-```plaintext
+```
 SystemPulse/
 ├── app/
-│   └── main.py                # core FastAPI app + collector
-├── influxdb.yaml              # k8s Deployment & Service for InfluxDB
-├── visualize_metrics/
-│   └── plot_metrics.py        # standalone script to pull & plot data
-├── tests/
-│   ├── unit/
-│   │   └── test_collect_metrics.py
-│   ├── integration/
-│   │   └── test_api_metrics.py
-│   └── e2e/
-│       └── test_influx_roundtrip.py
-├── conftest.py                # shared pytest fixtures
-├── requirements.txt           # runtime deps
-├── requirements-dev.txt       # pytest, testcontainers, httpx, etc.
-└── README.md                  # this file
-```  
+│   └── main.py                # FastAPI app + metric collector
+├── frontend/                  # React dashboard
+│   ├── src/                   # Charts, tables, UI logic
+│   └── package.json
+├── metrics/                   # Auto-dumped .txt files every 5 mins
+├── tests/                     # pytest-based tests (optional)
+├── .env                       # InfluxDB & Telegram secrets (optional)
+├── requirements.txt
+└── README.md
+```
 
 ---
 
@@ -82,108 +87,118 @@ SystemPulse/
 git clone https://github.com/yourorg/SystemPulse.git
 cd SystemPulse
 python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# macOS / Linux:
-source .venv/bin/activate
+. .venv/Scripts/activate   # Windows
+# or
+source .venv/bin/activate  # macOS/Linux
 
 pip install -r requirements.txt
 ```
 
-### 2. Run InfluxDB
-
-**Option A: Docker**
+### 2. Run InfluxDB 2.x
 
 ```bash
-docker run -d \
-  --name influxdb \
-  -p 8086:8086 \
+docker run -d --name influxdb -p 8086:8086 \
   -e DOCKER_INFLUXDB_INIT_MODE=setup \
   -e DOCKER_INFLUXDB_INIT_USERNAME=admin \
   -e DOCKER_INFLUXDB_INIT_PASSWORD=admin123 \
   -e DOCKER_INFLUXDB_INIT_ORG=SystemPulseOrg \
   -e DOCKER_INFLUXDB_INIT_BUCKET=system_metrics_bucket \
   -e DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=yourtoken \
-  influxdb:2.6
+  influxdb:2.7
 ```
 
-**Option B: Kubernetes**
+Then visit [http://localhost:8086](http://localhost:8086) and complete setup if needed.
+
+### 3. Start the Backend API (from project root)
 
 ```bash
-kubectl apply -f influxdb.yaml
+python -m uvicorn app.main:app --reload
 ```
 
-### 3. Start the API
+This will:
+
+* Launch FastAPI on `localhost:8000`
+* Start collecting metrics every 5s
+* Dump metrics to `metrics/` folder every 5m
+* Send Telegram alerts if enabled
+
+### 4. Start the Frontend (React Dashboard)
 
 ```bash
-uvicorn app.main:app --reload
+cd frontend
+npm install
+npm run dev
 ```
 
-You should see logs every 5 seconds:
-
-```
-INFO  app.main: Wrote CPU, memory, disk, network and 42 processes
-```
-
-### 4. Query Metrics
-
-```bash
-curl http://127.0.0.1:8000/metrics
-```
-
-Returns JSON:
-
-```json
-{
-  "data": [
-    {
-      "time": "2025-04-21T12:00:05Z",
-      "measurement": "cpu_usage",
-      "field": "usage_percent",
-      "value": 12.3
-    },
-    …
-  ]
-}
-```
+Now visit [http://localhost:3000](http://localhost:3000)
+You’ll see live charts and top processes.
 
 ---
 
-## Metrics Collected
+## Metrics Captured
 
-| Measurement      | Fields                                           |
-|------------------|--------------------------------------------------|
-| `cpu_info`       | `current_mhz`, `min_mhz`, `max_mhz`, `physical_cores`, `logical_threads` |
-| `cpu_usage`      | `usage_percent`, `load_avg_1m`, `load_avg_5m`, `load_avg_15m` |
-| `memory_usage`   | `total_mb`, `used_mb`                            |
-| `disk_usage`     | `total_gb`, `free_gb`                            |
-| `network_usage`  | `sent_mb`, `recv_mb`                             |
-| `process_info`   | tags: `pid`, `name`; fields: `cpu_pct`, `mem_pct` |
+| Measurement        | Fields                                                   |
+| ------------------ | -------------------------------------------------------- |
+| `cpu_info`         | `current_mhz`, `min_mhz`, `max_mhz`, `cores`             |
+| `cpu_usage`        | `usage_pct`, `load_1m`, `load_5m`, `load_15m`            |
+| `memory_usage`     | `used_mb`, `free_mb`, `swap_mb`, `total_mb`              |
+| `disk_io`          | `read_mb_s`, `write_mb_s`, `read_iops`, `write_iops`     |
+| `network_activity` | `sent_mb_s`, `recv_mb_s`, `packets_sent`, `packets_recv` |
+| `system_uptime`    | `uptime_s`                                               |
+| `process_info`     | tags: `pid`, `name` → `cpu_pct`, `mem_pct`               |
+
+---
+
+## Alerts & Notifications
+
+📲 SystemPulse supports **Telegram alerts** out-of-the-box.
+To enable:
+
+1. Create a bot via [@BotFather](https://t.me/BotFather)
+2. Get your bot token
+3. Start a chat with your bot and get your `chat_id` via [@userinfobot](https://t.me/userinfobot)
+
+Then in your `.env` or OS environment:
+
+```
+TELEGRAM_BOT_TOKEN=your:bot_token
+TELEGRAM_CHAT_ID=123456789
+```
+
+Alerts fire if:
+
+* CPU usage > 72%
+* Memory usage > 72%
+
+---
+
+## File-Based Metrics Dump
+
+Every 5 minutes, a `.txt` file with the last 5 minutes of all metrics is saved to:
+
+```bash
+/metrics/metrics_YYYYMMDD_HHMMSS.txt
+```
+
+This helps you keep historical records, even without InfluxDB queries.
 
 ---
 
 ## Testing
 
-Install dev dependencies:
+Unit and integration tests coming soon.
+
+For now, test your FastAPI endpoints manually:
 
 ```bash
-pip install -r requirements-dev.txt
+curl http://localhost:8000/metrics
+curl http://localhost:8000/processes
 ```
 
-Run tests with coverage:
-
-```bash
-pytest -vv --cov=app --cov-report=term-missing --cov-fail-under=85
-```
-
-This will show any untested lines and fail if coverage < 85%.
+You should get live metric JSON.
 
 ---
 
-## Future Enhancements
+---
 
-- Persist per-process history (instead of snapshot)  
-- Add authentication + metrics dashboard UI  
-- Support custom collection intervals via config  
-- Push metrics to other backends (Prometheus, Graphite)  
-
+> MIT Licensed · Built by Devs, for Devs · Contributions Welcome 🚀
