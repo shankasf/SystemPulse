@@ -26,15 +26,15 @@
 
 ## Features
 
-✅ FastAPI-based backend service
-✅ CPU, memory, disk, network, uptime & process info every 5s
-✅ InfluxDB 2.x integration with Flux queries
-✅ Real-time **React dashboard** at `http://localhost:3000`
-✅ Alerts via **Telegram bot** for CPU/Memory overuse
-✅ Auto-dumps last 5m metrics to `metrics/` every 5 minutes
-✅ Sortable process table with usage normalization
-✅ Responsive UI & notification toasts
-✅ CLI + GUI compatible
+1. FastAPI-based backend service
+2. Collects CPU, memory, disk, network, uptime & process info every 5s
+3. InfluxDB 2.x integration with Flux queries
+4. Real-time React dashboard at `http://localhost:3000`
+5. Alerts via Telegram bot for CPU/Memory overuse
+6. Auto-dumps last 5m metrics to `metrics/` every 5 minutes
+7. Sortable process table with usage normalization
+8. Responsive UI with notification toasts
+9. CLI + GUI compatible
 
 ---
 
