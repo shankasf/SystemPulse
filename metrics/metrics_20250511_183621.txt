@@ -1,0 +1,9 @@
+[
+  {
+    "time": "2025-05-11 22:31:31.429393+00:00",
+    "measurement": "cpu_usage",
+    "field": "load_15m",
+    "value": 0.17,
+    "result": "_result",
+    "table": 0,
+    "_start": 
